@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import MagicMock
 
 from autogluon.tabular import TabularPredictor
 from autogluon.timeseries import TimeSeriesPredictor
@@ -54,8 +53,12 @@ def test_detect_returns_timeseries_when_ts_loads(monkeypatch, tmp_path):
 
 def test_detect_falls_back_to_tabular_when_ts_load_fails(monkeypatch, tmp_path):
     tb_pred = _tabular_predictor()
+    calls = []
+    expected_path = str(tmp_path)
 
     def fake_load(cls, path):
+        calls.append(cls)
+        assert path == expected_path
         if cls is TimeSeriesPredictor:
             raise ValueError("not a time series predictor directory")
         if cls is TabularPredictor:
@@ -71,14 +74,19 @@ def test_detect_falls_back_to_tabular_when_ts_load_fails(monkeypatch, tmp_path):
 
     assert kind == "tabular"
     assert pred is tb_pred
+    assert calls == [TimeSeriesPredictor, TabularPredictor]
 
 
 def test_detect_falls_back_to_tabular_when_ts_returns_wrong_type(monkeypatch, tmp_path):
     tb_pred = _tabular_predictor()
+    calls = []
+    expected_path = str(tmp_path)
 
     def fake_load(cls, path):
+        calls.append(cls)
+        assert path == expected_path
         if cls is TimeSeriesPredictor:
-            return MagicMock()
+            return object()
         if cls is TabularPredictor:
             return tb_pred
         raise AssertionError(f"unexpected predictor class: {cls}")
@@ -92,10 +100,37 @@ def test_detect_falls_back_to_tabular_when_ts_returns_wrong_type(monkeypatch, tm
 
     assert kind == "tabular"
     assert pred is tb_pred
+    assert calls == [TimeSeriesPredictor, TabularPredictor]
+
+
+def test_detect_raises_when_both_return_wrong_type(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_load(cls, path):
+        calls.append(cls)
+        assert path == str(tmp_path)
+        return object()
+
+    monkeypatch.setattr(
+        "autogluonserver.predictor_detect.load_predictor_tolerating_patch_mismatch",
+        fake_load,
+    )
+
+    with pytest.raises(InferenceError) as exc_info:
+        detect_and_load_predictor(str(tmp_path))
+
+    msg = str(exc_info.value)
+    assert calls == [TimeSeriesPredictor, TabularPredictor]
+    assert "timeseries: loaded object is not TimeSeriesPredictor" in msg
+    assert "tabular: loaded object is not TabularPredictor" in msg
 
 
 def test_detect_raises_when_both_loads_fail(monkeypatch, tmp_path):
+    calls = []
+
     def fake_load(cls, path):
+        calls.append(cls)
+        assert path == str(tmp_path)
         if cls is TimeSeriesPredictor:
             raise ValueError("timeseries load failed")
         if cls is TabularPredictor:
@@ -111,6 +146,7 @@ def test_detect_raises_when_both_loads_fail(monkeypatch, tmp_path):
         detect_and_load_predictor(str(tmp_path))
 
     msg = str(exc_info.value)
+    assert calls == [TimeSeriesPredictor, TabularPredictor]
     assert str(tmp_path) in msg
     assert "timeseries: timeseries load failed" in msg
     assert "tabular: tabular load failed" in msg
