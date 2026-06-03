@@ -16,18 +16,32 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
-from typing import Optional, Type, TypeVar
+from typing import Any, Optional, Protocol, TypeVar
 
 from kserve.errors import InferenceError
 from packaging.version import InvalidVersion, Version
 
-_T = TypeVar("_T")
+_T = TypeVar("_T", covariant=True)
+
+
+class _PredictorClass(Protocol[_T]):
+    __module__: str
+
+    @classmethod
+    def load(
+        cls,
+        path: str,
+        require_version_match: bool = ...,
+    ) -> _T: ...
+
 
 # AutoGluon saves the version here; legacy name used in autogluon.tabular <= 1.1.0.
 _VERSION_FILENAMES = ("version.txt", "__version__")
 
 
-def load_predictor_tolerating_patch_mismatch(predictor_cls: Type[_T], path: str) -> _T:
+def load_predictor_tolerating_patch_mismatch(
+    predictor_cls: _PredictorClass[_T], path: str
+) -> _T:
     """
     Load an AutoGluon predictor, allowing patch-level version mismatches.
 
@@ -69,7 +83,7 @@ def _read_saved_version(predictor_path: str) -> Optional[Version]:
     return None
 
 
-def _get_installed_version(predictor_cls: type) -> Optional[Version]:
+def _get_installed_version(predictor_cls: _PredictorClass[Any]) -> Optional[Version]:
     """Return the installed version of the AutoGluon package that owns predictor_cls."""
     package = ".".join(predictor_cls.__module__.split(".")[:2])
     try:
