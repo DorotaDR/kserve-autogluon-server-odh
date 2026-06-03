@@ -355,12 +355,12 @@ def _forecast_to_records(
     for row in work.to_dict(orient="records"):
         out: Dict[str, Any] = {}
         for k, v in row.items():
-            if isinstance(v, (np.floating, float)):
+            if pd.isna(v):
+                out[k] = None
+            elif isinstance(v, (np.floating, float)):
                 out[k] = float(v)
             elif isinstance(v, (np.integer, int)) and not isinstance(v, bool):
                 out[k] = int(v)
-            elif pd.isna(v):
-                out[k] = None
             else:
                 out[k] = v
         records.append(out)

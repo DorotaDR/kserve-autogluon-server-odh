@@ -296,6 +296,31 @@ def test_forecast_to_records_renames_flat_dataframe_columns():
     assert "timestamp" not in row
 
 
+def test_forecast_to_records_converts_nan_to_none():
+    meta = TimeSeriesInferenceMetadata(
+        target="y",
+        id_column="item_id",
+        timestamp_column="timestamp",
+        prediction_length=1,
+        known_covariates_names=[],
+    )
+    forecasts = pd.DataFrame(
+        {
+            "item_id": ["i1"],
+            "timestamp": [pd.Timestamp("2024-01-05")],
+            "mean": [float("nan")],
+            "0.1": [2.0],
+        }
+    )
+
+    row = _forecast_to_records(forecasts, meta)[0]
+
+    assert row["item_id"] == "i1"
+    assert row["timestamp"] == "2024-01-05T00:00:00"
+    assert row["mean"] is None
+    assert row["0.1"] == pytest.approx(2.0)
+
+
 def test_load_ts_metadata_invalid_json_raises(tmp_path):
     meta = tmp_path / "predictor_metadata.json"
     meta.write_text("{not json", encoding="utf-8")
