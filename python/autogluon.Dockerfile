@@ -1,6 +1,6 @@
 ARG PYTHON_VERSION=3.12
-#ARG BASE_IMAGE=python:${PYTHON_VERSION}-slim
-ARG BASE_IMAGE=public.ecr.aws/docker/library/python:${PYTHON_VERSION}-slim
+ARG BASE_IMAGE=python:${PYTHON_VERSION}-slim-bookworm
+
 
 ARG VENV_PATH=/prod_venv
 
@@ -20,8 +20,8 @@ ENV VIRTUAL_ENV=${VENV_PATH}
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-COPY storage/pyproject.toml storage/uv.lock storage/README.md storage/
-COPY storage/kserve_storage storage/kserve_storage
+COPY storage storage
+
 COPY kserve/pyproject.toml kserve/uv.lock kserve/
 RUN cd kserve && uv sync --active --no-cache
 
@@ -29,11 +29,7 @@ COPY kserve kserve
 RUN cd kserve && uv sync --active --no-cache
 
 # ========== Install kserve storage dependencies ==========
-COPY storage/pyproject.toml storage/uv.lock storage/
 RUN cd storage && uv sync --active --no-cache
-
-COPY storage storage
-RUN cd storage && uv pip install . --no-cache
 
 # ========== Install autogluonserver dependencies ==========
 COPY autogluonserver autogluonserver
@@ -42,10 +38,10 @@ RUN cd autogluonserver && uv sync --active --no-cache
 # Generate third-party licenses
 COPY pyproject.toml pyproject.toml
 COPY third_party/pip-licenses.py pip-licenses.py
-# TODO: Remove this when upgrading to python 3.11+
-RUN pip install --no-cache-dir tomli
-RUN mkdir -p third_party/library && python3 pip-licenses.py
 
+RUN pip install --no-cache-dir tomli
+
+RUN mkdir -p third_party/library && python3 pip-licenses.py
 
 # =================== Final stage ===================
 FROM ${BASE_IMAGE} AS prod
